@@ -20,6 +20,9 @@
 #ifndef TC_HEADER_CUDACORE
 #define TC_HEADER_CUDACORE
 
+#ifdef _WIN32
+#include <stdint.h>
+#endif
 
 #define PASSWORD_MAXSIZE	32
 #define SALT_LENGTH 		64

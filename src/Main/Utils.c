@@ -22,19 +22,23 @@
 #define _LARGEFILE_SOURCE
 #define _LARGEFILE64_SOURCE
 
- 
+
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
- 
-
 #include <fcntl.h>
+#include <time.h>
+
+#ifdef _WIN32
+#include <io.h>
+#include <stdint.h>
+#else
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
-#include <time.h>
+#endif
 
 #include "Tcdefs.h"
 #include "Utils.h"

@@ -35,7 +35,7 @@
 #define NULL 0
 #endif
 
-#ifndef DWORD
+#if !defined(DWORD) && !defined(_WIN32)
 #define WINAPI
 typedef unsigned long DWORD;
 typedef short WCHAR;
@@ -259,10 +259,25 @@ typedef int BOOL;
 #	define TC_WAIT_EVENT(EVENT) WaitForSingleObject (EVENT, INFINITE)
 #endif
 
-#ifdef _WIN32
+#if defined(__CUDA_ARCH__) || defined(_GPU_)
+// CUDA device code - use simple volatile memset
+#define burn(mem,size) do { volatile char *burnm = (volatile char *)(mem); int burnc = size; while (burnc--) *burnm++ = 0; } while (0)
+#elif defined(_WIN32)
 #define burn(mem,size) do { volatile char *burnm = (volatile char *)(mem); int burnc = size; RtlSecureZeroMemory (mem, size); while (burnc--) *burnm++ = 0; } while (0)
 #else
 #define burn(mem,size) do { volatile char *burnm = (volatile char *)(mem); int burnc = size; while (burnc--) *burnm++ = 0; } while (0)
+#endif
+
+// CUDA-compatible rotate macros - use macros to avoid intrinsic conflicts
+#if defined(__CUDA_ARCH__)
+#undef _rotl
+#undef _rotr
+#undef _lrotl
+#undef _lrotr
+#define _rotl(value, shift) (((value) << (shift)) | ((value) >> (32 - (shift))))
+#define _rotr(value, shift) (((value) >> (shift)) | ((value) << (32 - (shift))))
+#define _lrotl(value, shift) (((value) << (shift)) | ((value) >> (32 - (shift))))
+#define _lrotr(value, shift) (((value) >> (shift)) | ((value) << (32 - (shift))))
 #endif
 
 // The size of the memory area to wipe is in bytes amd it must be a multiple of 8.

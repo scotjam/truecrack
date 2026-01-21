@@ -19,7 +19,12 @@
 #include "Utils.h"
 #include "Volumes.h"
 #include <string.h>
+#ifdef _WIN32
+#include "getopt.h"
+#define strcasecmp _stricmp
+#else
 #include <getopt.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include "Core.h"

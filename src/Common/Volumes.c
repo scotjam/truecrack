@@ -32,10 +32,15 @@
 
 #ifndef TC_WINDOWS_BOOT
 #include <fcntl.h>
+#include <time.h>
+#ifdef _WIN32
+#include <sys/types.h>
+#include <sys/stat.h>
+#else
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
-#include <time.h>
+#endif
 //#include "EncryptionThreadPool.h"
 #endif
 

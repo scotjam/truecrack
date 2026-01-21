@@ -20,7 +20,11 @@
 #define HEADER_Utils
 
 #include <stdio.h>
+#ifdef _WIN32
+#include <stdint.h>
+#else
 #include <sys/types.h>
+#endif
 #include "Tcdefs.h"
 
 #define MAXWORDSIZE	64
