@@ -94,21 +94,42 @@ unsigned int file_offset (FILE *fp, unsigned int offset) {
 int file_readWordsBlock (FILE *fp, int block_size, char *words, int *words_init, int *words_length) {
     char buffer[MAXWORDSIZE];
     int i=0;
+    int len;
+    char *start;
 
-    for (i=0;i<block_size;i++) {
+    while (i < block_size) {
         if (fgets (buffer , MAXWORDSIZE , fp) == NULL)
             return i;
+
+        /* Strip trailing whitespace, newline and carriage return */
+        len = strlen(buffer);
+        while (len > 0 && (buffer[len-1] == '\n' || buffer[len-1] == '\r' ||
+                          buffer[len-1] == ' ' || buffer[len-1] == '\t')) {
+            buffer[--len] = '\0';
+        }
+
+        /* Skip leading whitespace */
+        start = buffer;
+        while (*start == ' ' || *start == '\t') {
+            start++;
+            len--;
+        }
+
+        /* Skip empty or whitespace-only lines */
+        if (len <= 0)
+            continue;
+
         if (i==0)
             words_init[0]=0;
         else
             words_init[i]=words_init[i-1]+words_length[i-1];
 
-        words_length[i]=strlen(buffer);
-        memcpy(words+words_init[i],buffer,strlen(buffer));
-        words[words_init[i]+strlen(buffer)-1]='\0'; //remmember the \0
+        words_length[i]=len;
+        memcpy(words+words_init[i],start,len);
+        i++;
     }
 
-    return block_size;
+    return i;
 
 }
 
@@ -117,7 +138,7 @@ int file_readHeader(char *volumePath, char *header, int backup, int hidden) {
     FILE *fp;
     int i=0;
 
-    fp=fopen(volumePath,"r");
+    fp=fopen(volumePath,"rb");
     if (fp == NULL) {
         perror ("Error opening volume file");
         return 0;

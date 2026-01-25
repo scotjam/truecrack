@@ -62,9 +62,9 @@ __device__ void cuda_derive_u_sha512 (unsigned char *pwd, int pwd_len, unsigned 
 __device__ void cuda_derive_key_sha512 (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *dk, int dklen);
 
 
-__device__ void cuda_hmac_whirlpool(  unsigned char *k, int lk, unsigned char *d, unsigned char *out,int t);
-__device__ void cuda_derive_u_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *u, int b);
-__device__ void cuda_derive_key_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *dk, int dklen);
+__device__ void cuda_hmac_whirlpool(  unsigned char *k, int lk, unsigned char *d, int ld, unsigned char *out, int t, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7);
+__device__ void cuda_derive_u_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *u, int b, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7);
+__device__ void cuda_derive_key_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *dk, int dklen, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7);
 
 __device__ void cuda_hmac_ripemd160 (unsigned char *key, int keylen, unsigned char *input, int len, unsigned char *digest);
 __device__ void cuda_derive_u_ripemd160 (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *u, int b);

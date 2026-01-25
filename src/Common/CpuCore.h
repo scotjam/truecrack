@@ -26,7 +26,7 @@
 #include "Crypto.h"
 
 #define SALT_LENGTH 		64
-#define PASSWORD_MAXSIZE 32
+#define PASSWORD_MAXSIZE 128
 
 enum{
   NODEFINED,

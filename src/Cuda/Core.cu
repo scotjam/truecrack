@@ -31,7 +31,7 @@ __device__ __constant__ unsigned char cHeaderEncrypted[TC_VOLUME_HEADER_EFFECTIV
 __device__ __constant__ unsigned char cSalt[SALT_LENGTH];
 
 /* Header key size */
-#define MAXPKCS5OUTSIZE 64
+#define MAXPKCS5OUTSIZE 192  // 3 ciphers * 32 bytes * 2 (primary + secondary XTS keys)
 
 /* The max number of block grid; number of max parallel gpu blocks. */
 int blockGridSizeMax;
@@ -95,33 +95,74 @@ __global__ void cuKernel_generate(unsigned char *blockPwd, int *blockPwd_init, i
     	word[i]=charset[word[i]];
 }
 
-// GPU kernel: ripemd160 hash
-__global__ void cuKernel_ripemd160 (unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, unsigned char *headerKey, int max) {
+// Helper: Get key size for encryption algorithm (32 bytes per cipher, doubled for XTS)
+__host__ __device__ int cuGetKeySize(int ea) {
+	switch(ea) {
+		case AES:
+		case SERPENT:
+		case TWOFISH:
+			return 64;   // 32 primary + 32 secondary
+		case AES_TWOFISH:
+		case SERPENT_AES:
+		case TWOFISH_SERPENT:
+			return 128;  // 2 ciphers * 32 * 2
+		case AES_TWOFISH_SERPENT:
+		case SERPENT_TWOFISH_AES:
+			return 192;  // 3 ciphers * 32 * 2
+		default:
+			return 64;
+	}
+}
+
+// GPU kernel: ripemd160 hash (with variable key length)
+__global__ void cuKernel_ripemd160 (unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, unsigned char *headerKey, int max, int keyLen) {
 	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
 	if (numData>=max) return;
-	cuda_derive_key_ripemd160 (  blockPwd+blockPwd_init[numData], blockPwd_length[numData], cSalt, PKCS5_SALT_SIZE, 2000, headerKey+numData*MAXPKCS5OUTSIZE, 64);
+	cuda_derive_key_ripemd160 (blockPwd+blockPwd_init[numData], blockPwd_length[numData], cSalt, PKCS5_SALT_SIZE, 2000, headerKey+numData*MAXPKCS5OUTSIZE, keyLen);
 }
-// GPU kernel: sha512 hash
-__global__ void cuKernel_sha512 ( unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, unsigned char *headerKey, int max) {
+// GPU kernel: sha512 hash (with variable key length)
+__global__ void cuKernel_sha512 (unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, unsigned char *headerKey, int max, int keyLen) {
 	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
 	if (numData>=max) return;
-	cuda_derive_key_sha512 (  blockPwd+blockPwd_init[numData], blockPwd_length[numData], cSalt, PKCS5_SALT_SIZE, 1000, headerKey+numData*MAXPKCS5OUTSIZE, 64);
+	cuda_derive_key_sha512 (blockPwd+blockPwd_init[numData], blockPwd_length[numData], cSalt, PKCS5_SALT_SIZE, 1000, headerKey+numData*MAXPKCS5OUTSIZE, keyLen);
 }
-// GPU kernel: whirlpool hash
-__global__ void cuKernel_whirlpool ( unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, unsigned char *headerKey, int max) {
-       int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
-        if (numData>=max) return;
-        cuda_derive_key_whirlpool (  blockPwd+blockPwd_init[numData], blockPwd_length[numData], cSalt, PKCS5_SALT_SIZE, 1000, headerKey+numData*MAXPKCS5OUTSIZE, 64);
+// GPU kernel: whirlpool hash (with variable key length)
+__global__ void cuKernel_whirlpool (unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, unsigned char *headerKey, int max, int keyLen) {
+	__shared__ u64 sC0[256];
+	__shared__ u64 sC1[256];
+	__shared__ u64 sC2[256];
+	__shared__ u64 sC3[256];
+	__shared__ u64 sC4[256];
+	__shared__ u64 sC5[256];
+	__shared__ u64 sC6[256];
+	__shared__ u64 sC7[256];
+
+	for (int i = threadIdx.x; i < 256; i += blockDim.x) {
+		sC0[i] = C0[i];
+		sC1[i] = C1[i];
+		sC2[i] = C2[i];
+		sC3[i] = C3[i];
+		sC4[i] = C4[i];
+		sC5[i] = C5[i];
+		sC6[i] = C6[i];
+		sC7[i] = C7[i];
+	}
+	__syncthreads();
+
+	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
+	if (numData>=max) return;
+	cuda_derive_key_whirlpool (blockPwd+blockPwd_init[numData], blockPwd_length[numData], cSalt, PKCS5_SALT_SIZE, 1000, headerKey+numData*MAXPKCS5OUTSIZE, keyLen, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 }
+
 // GPU kernel: aes xts decryption
-__global__ void cuKernel_aes ( unsigned char *headerKey, short int *result, int max) {
+__global__ void cuKernel_aes (unsigned char *headerKey, short int *result, int max) {
 	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
 	if (numData>=max) return;
 	__align__(8) unsigned char headerDecrypted[512];
 	result[numData]=cuXts (AES,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
 }
 // GPU kernel: serpent xts decryption
-__global__ void cuKernel_serpent ( unsigned char *headerKey, short int *result, int max) {
+__global__ void cuKernel_serpent (unsigned char *headerKey, short int *result, int max) {
 	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
 	if (numData>=max) return;
 	__align__(8) unsigned char headerDecrypted[512];
@@ -135,6 +176,42 @@ __global__ void cuKernel_twofish (unsigned char *headerKey, short int *result, i
 	result[numData]=cuXts (TWOFISH,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
 }
 
+// GPU kernel: aes-twofish cascade xts decryption
+__global__ void cuKernel_aes_twofish (unsigned char *headerKey, short int *result, int max) {
+	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
+	if (numData>=max) return;
+	__align__(8) unsigned char headerDecrypted[512];
+	result[numData]=cuXts (AES_TWOFISH,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
+}
+// GPU kernel: aes-twofish-serpent cascade xts decryption
+__global__ void cuKernel_aes_twofish_serpent (unsigned char *headerKey, short int *result, int max) {
+	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
+	if (numData>=max) return;
+	__align__(8) unsigned char headerDecrypted[512];
+	result[numData]=cuXts (AES_TWOFISH_SERPENT,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
+}
+// GPU kernel: serpent-aes cascade xts decryption
+__global__ void cuKernel_serpent_aes (unsigned char *headerKey, short int *result, int max) {
+	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
+	if (numData>=max) return;
+	__align__(8) unsigned char headerDecrypted[512];
+	result[numData]=cuXts (SERPENT_AES,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
+}
+// GPU kernel: serpent-twofish-aes cascade xts decryption
+__global__ void cuKernel_serpent_twofish_aes (unsigned char *headerKey, short int *result, int max) {
+	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
+	if (numData>=max) return;
+	__align__(8) unsigned char headerDecrypted[512];
+	result[numData]=cuXts (SERPENT_TWOFISH_AES,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
+}
+// GPU kernel: twofish-serpent cascade xts decryption
+__global__ void cuKernel_twofish_serpent (unsigned char *headerKey, short int *result, int max) {
+	int numData=blockIdx.x*NUMTHREADSXBLOCK+threadIdx.x;
+	if (numData>=max) return;
+	__align__(8) unsigned char headerDecrypted[512];
+	result[numData]=cuXts (TWOFISH_SERPENT,cHeaderEncrypted, headerKey+numData*MAXPKCS5OUTSIZE,headerDecrypted);
+}
+
 // Perform the bruteforce on dictionary mode
 float cuda_Core_dictionary ( int encryptionAlgorithm, int bsize, unsigned char *blockPwd, int *blockPwd_init, int *blockPwd_length, short int *result, int keyDerivationFunction) {
 	// Initialization
@@ -143,6 +220,12 @@ float cuda_Core_dictionary ( int encryptionAlgorithm, int bsize, unsigned char *
 		lengthpwd+=blockPwd_length[j];
 		result[j]=0;
 	}
+
+	// Skip if no valid passwords in batch
+	if (lengthpwd == 0 || bsize == 0) {
+		return 0.0f;
+	}
+
 	// Copy memory datas from host to gpu
 	HANDLE_ERROR(cudaMemcpy(dev_blockPwd, 		blockPwd, 		lengthpwd * sizeof(unsigned char) , cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(dev_blockPwd_init, 	blockPwd_init, 	bsize * sizeof(int) , cudaMemcpyHostToDevice));
@@ -162,19 +245,22 @@ float cuda_Core_dictionary ( int encryptionAlgorithm, int bsize, unsigned char *
 	cudaEventCreate(&tstop);
 	cudaEventRecord(tstart, 0);
 
+	// Calculate key size based on encryption algorithm
+	int keyLen = cuGetKeySize(encryptionAlgorithm);
+
 	// GPU Kernel: Key derivation function
 	switch(keyDerivationFunction){
 		case RIPEMD160:
-			cuKernel_ripemd160 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize);
+			cuKernel_ripemd160 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize, keyLen);
 			break;
 		case SHA512:
-			cuKernel_sha512 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey,bsize);
+			cuKernel_sha512 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize, keyLen);
 			break;
 		case WHIRLPOOL:
-			cuKernel_whirlpool <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey,bsize);
+			cuKernel_whirlpool <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize, keyLen);
 			break;
 	}
-	
+
 	// GPU Kernel: Encryption algorithms
 	switch(encryptionAlgorithm){
 		case AES:
@@ -185,6 +271,21 @@ float cuda_Core_dictionary ( int encryptionAlgorithm, int bsize, unsigned char *
 			break;
 		case TWOFISH:
 			cuKernel_twofish<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case AES_TWOFISH:
+			cuKernel_aes_twofish<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case AES_TWOFISH_SERPENT:
+			cuKernel_aes_twofish_serpent<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case SERPENT_AES:
+			cuKernel_serpent_aes<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case SERPENT_TWOFISH_AES:
+			cuKernel_serpent_twofish_aes<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case TWOFISH_SERPENT:
+			cuKernel_twofish_serpent<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
 			break;
 	}
 
@@ -226,20 +327,23 @@ float cuda_Core_charset ( int encryptionAlgorithm, uint64_t bsize, uint64_t star
 
 	// GPU Kernel: generate passwords
 	cuKernel_generate <<<numBlocks,numThreads>>>(dev_blockPwd,dev_blockPwd_init,dev_blockPwd_length,(int)start,bsize,charset_length,dev_charset,password_length);
-	
+
+	// Calculate key size based on encryption algorithm
+	int keyLen = cuGetKeySize(encryptionAlgorithm);
+
 	// GPU Kernel: Key derivation function
 	switch(keyDerivationFunction){
 		case RIPEMD160:
-			cuKernel_ripemd160 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize);
+			cuKernel_ripemd160 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize, keyLen);
 			break;
 		case SHA512:
-			cuKernel_sha512 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey,bsize);
+			cuKernel_sha512 <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize, keyLen);
 			break;
 		case WHIRLPOOL:
-			cuKernel_whirlpool <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey,bsize);
+			cuKernel_whirlpool <<<numBlocks,numThreads>>>(dev_blockPwd, dev_blockPwd_init, dev_blockPwd_length, dev_headerKey, bsize, keyLen);
 			break;
 	}
-	
+
 	// GPU Kernel: Encryption algorithms
 	switch(encryptionAlgorithm){
 		case AES:
@@ -251,8 +355,23 @@ float cuda_Core_charset ( int encryptionAlgorithm, uint64_t bsize, uint64_t star
 		case TWOFISH:
 			cuKernel_twofish<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
 			break;
+		case AES_TWOFISH:
+			cuKernel_aes_twofish<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case AES_TWOFISH_SERPENT:
+			cuKernel_aes_twofish_serpent<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case SERPENT_AES:
+			cuKernel_serpent_aes<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case SERPENT_TWOFISH_AES:
+			cuKernel_serpent_twofish_aes<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
+		case TWOFISH_SERPENT:
+			cuKernel_twofish_serpent<<<numBlocks,numThreads>>>(dev_headerKey, dev_result, bsize);
+			break;
 	}
-	
+
 	// Stop timer
     cudaEventRecord(tstop, 0);
     cudaEventSynchronize(tstop);

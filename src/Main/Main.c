@@ -44,15 +44,19 @@ void print_usage (FILE* stream, int exit_code)
 	fprintf(stream,"%s\n",MESSAGE);
 
 	fprintf (stream, "\nUsage for Dictionary attack:\n"
-			" %s -t truecrypt_file -w passwords_file [-k ripemd160 | -k sha512 | -k whirlpool] [-e aes | -e serpent | -e twofish] [-a blocks] [-b] [-H] [-r number]\n"
+			" %s -t truecrypt_file -w passwords_file [-k ripemd160 | -k sha512 | -k whirlpool | -k all] [-e aes | -e serpent | -e twofish | -e all] [-a blocks] [-b] [-H] [-r number]\n"
 			"Usage for Alphabet attack:\n"
-			" %s -t truecrypt_file -c alphabet [-s minlength] -m maxlength [-p string] [-k ripemd160 | -k sha512 | -k whirlpool] [-e aes | -e serpent | -e twofish] [-a blocks] [-b] [-H] [-r number]\n"
+			" %s -t truecrypt_file -c alphabet [-s minlength] -m maxlength [-p string] [-k ripemd160 | -k sha512 | -k whirlpool | -k all] [-e aes | -e serpent | -e twofish | -e all] [-a blocks] [-b] [-H] [-r number]\n"
 			, program_name, program_name);
 	fprintf (stream, "\nOptions:\n"
 			" -h --help					Display this information.\n"
 			" -t --truecrypt <truecrypt_file>		Truecrypt volume file.\n"
-			" -k --key <ripemd160 | sha512 | whirlpool>	Key derivation function (default ripemd160).\n"
-			" -e --encryption <aes | serpent | twofish>	Encryption algorithm (default aes).\n"
+			" -k --key <hash | all>				Key derivation function (default ripemd160).\n"
+			"    hash: ripemd160, sha512, whirlpool\n"
+			" -e --encryption <cipher | all>		Encryption algorithm (default aes).\n"
+			"    cipher: aes, serpent, twofish,\n"
+			"            aes-twofish, aes-twofish-serpent, serpent-aes,\n"
+			"            serpent-twofish-aes, twofish-serpent\n"
 			" -a --aggressive <blocks>			Number of parallel computations (board dependent).\n"
 			" -w --wordlist <wordlist_file>			File of words, for Dictionary attack.\n"
 			" -c --charset <alphabet>			Alphabet generator, for Alphabet attack.\n"
@@ -234,6 +238,18 @@ int main (int argc, char* argv[])
 		CORE_encryptionAlgorithm=SERPENT;
 	else if (strcasecmp(encryptionAlgorithm,"twofish")==0)
 		CORE_encryptionAlgorithm=TWOFISH;
+	else if (strcasecmp(encryptionAlgorithm,"aes-twofish")==0)
+		CORE_encryptionAlgorithm=AES_TWOFISH;
+	else if (strcasecmp(encryptionAlgorithm,"aes-twofish-serpent")==0)
+		CORE_encryptionAlgorithm=AES_TWOFISH_SERPENT;
+	else if (strcasecmp(encryptionAlgorithm,"serpent-aes")==0)
+		CORE_encryptionAlgorithm=SERPENT_AES;
+	else if (strcasecmp(encryptionAlgorithm,"serpent-twofish-aes")==0)
+		CORE_encryptionAlgorithm=SERPENT_TWOFISH_AES;
+	else if (strcasecmp(encryptionAlgorithm,"twofish-serpent")==0)
+		CORE_encryptionAlgorithm=TWOFISH_SERPENT;
+	else if (strcasecmp(encryptionAlgorithm,"all")==0)
+		CORE_encryptionAlgorithm=EA_ALL;
 	else
 		print_usage (stdout, 0);
 
@@ -245,6 +261,8 @@ int main (int argc, char* argv[])
 		CORE_keyDerivationFunction=SHA512;
 	else if (strcasecmp(keyDerivationFunction,"whirlpool")==0)
 		CORE_keyDerivationFunction=WHIRLPOOL;
+	else if (strcasecmp(keyDerivationFunction,"all")==0)
+		CORE_keyDerivationFunction=KDF_ALL;
 	else
 		print_usage (stdout, 0);
 

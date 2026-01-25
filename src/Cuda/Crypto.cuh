@@ -142,8 +142,15 @@ enum
 {
 	NONE = 0,
 	AES,
-	SERPENT,			
-	TWOFISH,			
+	SERPENT,
+	TWOFISH,
+	// Cascade ciphers
+	AES_TWOFISH,			// AES then Twofish
+	AES_TWOFISH_SERPENT,	// AES then Twofish then Serpent
+	SERPENT_AES,			// Serpent then AES
+	SERPENT_TWOFISH_AES,	// Serpent then Twofish then AES
+	TWOFISH_SERPENT,		// Twofish then Serpent
+	EA_ALL,					// Try all encryption algorithms
 #ifndef TC_WINDOWS_BOOT
 	BLOWFISH,		// Deprecated/legacy
 	CAST,			// Deprecated/legacy
@@ -197,11 +204,9 @@ typedef struct
 #		define MAX_EXPANDED_KEY	TWOFISH_KS
 #	endif
 
-#else	
-//************************
-//#define MAX_EXPANDED_KEY	(AES_KS + SERPENT_KS + TWOFISH_KS)
-#define MAX_EXPANDED_KEY	AES_KS+ SERPENT_KS
-//*************************
+#else
+// Must include all three cipher key schedules for cascade support
+#define MAX_EXPANDED_KEY	(AES_KS + SERPENT_KS + TWOFISH_KS)
 
 #endif
 	
@@ -219,6 +224,7 @@ typedef struct
 #	include "AesSmall.h"
 #endif
 
+#include "Twofish.cuh"
 
 //#include "GfMul.h"
 #include "Password.h"

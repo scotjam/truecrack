@@ -117,6 +117,8 @@ typedef signed long long s64;
  * Whirlpool-specific definitions.
  */
 
+#define R 10
+
 #define DIGESTBYTES 64
 #define DIGESTBITS  (8*DIGESTBYTES) /* 512 */
 
@@ -140,8 +142,8 @@ typedef struct NESSIEstruct {
 
 typedef NESSIEstruct WHIRLPOOL_CTX;
 
-__device__ void WHIRLPOOL_add(const unsigned char * const source, unsigned __int32 sourceBits, struct NESSIEstruct * const structpointer);
-__device__ void WHIRLPOOL_finalize(struct NESSIEstruct * const structpointer, unsigned char * const result);
+__device__ void WHIRLPOOL_add(const unsigned char * const source, unsigned __int32 sourceBits, struct NESSIEstruct * const structpointer, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7);
+__device__ void WHIRLPOOL_finalize(struct NESSIEstruct * const structpointer, unsigned char * const result, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7);
 __device__ void WHIRLPOOL_init(struct NESSIEstruct * const structpointer); 
 
 #if defined(__cplusplus)

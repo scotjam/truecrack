@@ -76,7 +76,7 @@ extern "C" {
 // The first PRF to try when mounting
 #define FIRST_PRF_ID		1	
 
-// Hash algorithms (pseudorandom functions). 
+// Hash algorithms (pseudorandom functions).
 enum
 {
 	RIPEMD160 = FIRST_PRF_ID,
@@ -85,7 +85,8 @@ enum
 	WHIRLPOOL,
 	SHA1,				// Deprecated/legacy
 #endif
-	HASH_ENUM_END_ID
+	HASH_ENUM_END_ID,
+	KDF_ALL				// Try all key derivation functions
 };
 
 // The last PRF to try when mounting and also the number of implemented PRFs
@@ -142,8 +143,15 @@ enum
 {
 	NONE = 0,
 	AES,
-	SERPENT,			
-	TWOFISH,			
+	SERPENT,
+	TWOFISH,
+	// Cascade ciphers
+	AES_TWOFISH,			// AES then Twofish
+	AES_TWOFISH_SERPENT,	// AES then Twofish then Serpent
+	SERPENT_AES,			// Serpent then AES
+	SERPENT_TWOFISH_AES,	// Serpent then Twofish then AES
+	TWOFISH_SERPENT,		// Twofish then Serpent
+	EA_ALL,					// Try all encryption algorithms
 #ifndef TC_WINDOWS_BOOT
 	BLOWFISH,		// Deprecated/legacy
 	CAST,			// Deprecated/legacy

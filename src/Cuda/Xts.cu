@@ -180,7 +180,7 @@ __device__ static void cuEncryptDecryptBufferXTS32 (const unsigned __int8 *buffe
 				
 				bufPtr32 -= BYTES_PER_XTS_BLOCK / sizeof (*bufPtr32) - 1;
 				
-				// Actual encryption/decryption
+				// Actual encryption/decryption (single cipher per XTS pass)
 				if (decryption)
 					cuDecipherBlock (cipher, bufPtr32, ks);
 				else
@@ -279,47 +279,74 @@ __device__ void cuDecryptBuffer (unsigned __int8 *buf, TC_LARGEST_COMPILER_UINT 
 
 
 __device__ int cuXts(int encryptionAlgorithm, unsigned char *encryptedHeader, unsigned char *headerKey, unsigned char *header) {
-	
+
     PCRYPTO_INFO cryptoInfo;
     CRYPTO_INFO cryptoInfo_struct;
-	
+
     uint16 headerVersion;
     int status = ERR_PARAMETER_INCORRECT;
-    int primaryKeyOffset=0;
-	int eaGetKeySize=32; 
-	
+
     //int pkcs5PrfCount = LAST_PRF_ID - FIRST_PRF_ID + 1;
-	
-    cryptoInfo=&cryptoInfo_struct;    
+
+    cryptoInfo=&cryptoInfo_struct;
     if (cryptoInfo == NULL)
         return ERR_OUT_OF_MEMORY;
     memset (cryptoInfo, 0, sizeof (CRYPTO_INFO));
 
     // Init objects related to the mode of operation
-	// Support only XTS
-    cryptoInfo->mode= XTS ;
-	if (encryptionAlgorithm!=AES && encryptionAlgorithm!=SERPENT && encryptionAlgorithm!=TWOFISH)
-		return UNDEFINED;
-    cryptoInfo->ea=encryptionAlgorithm;
-	
-	// Primary key schedule
-	cuda_memcpy (cryptoInfo->k2, headerKey + primaryKeyOffset, 64);
-	status = cuCipherInit (cryptoInfo->ea, cryptoInfo->k2, cryptoInfo->ks);
-    if (status != ERR_SUCCESS)
-        return ERR_CIPHER_INIT;
-        
-    // Secondary key schedule
-    cuda_memcpy (cryptoInfo->k2, headerKey + eaGetKeySize, eaGetKeySize);
-	status = cuCipherInit (cryptoInfo->ea, cryptoInfo->k2, cryptoInfo->ks2);
-    if (status != ERR_SUCCESS)
-        return ERR_MODE_INIT;
-    
- 
+    // Support only XTS
+    cryptoInfo->mode = XTS;
+
+    // Get ciphers for this encryption algorithm (in encryption order)
+    int ciphers[3];
+    int numCiphers = cuGetCiphers(encryptionAlgorithm, ciphers);
+    if (numCiphers == 0)
+        return UNDEFINED;
+
     // Copy the header for decryption
     cuda_memcpy (header, encryptedHeader, 512*sizeof(unsigned char));
-	
-    // Try to decrypt header
-    cuDecryptBuffer (header + HEADER_ENCRYPTED_DATA_OFFSET, HEADER_ENCRYPTED_DATA_SIZE, cryptoInfo);
+
+    // For cascade XTS decryption, we need to do a full XTS pass for each cipher
+    // in REVERSE order (last cipher first)
+    // Each cipher has its own key at offset (cipher_index * 32) for primary
+    // and (total_primary_key_size + cipher_index * 32) for secondary
+    int totalKeySize = numCiphers * 32;
+
+    // Calculate key schedule sizes for offset calculation
+    int ksSize[3];
+    for (int i = 0; i < numCiphers; i++) {
+        ksSize[i] = cuGetCipherKsSize(ciphers[i]);
+    }
+
+    // Decrypt in reverse cipher order (last encryption cipher first)
+    for (int c = numCiphers - 1; c >= 0; c--) {
+        int cipher = ciphers[c];
+
+        // Calculate key offset for this cipher
+        int keyOffset = c * 32;
+
+        // Calculate key schedule offset for this cipher
+        int ksOffset = 0;
+        for (int j = 0; j < c; j++) {
+            ksOffset += ksSize[j];
+        }
+
+        // Initialize primary key schedule for this cipher
+        status = cuCipherInit(cipher, headerKey + keyOffset, cryptoInfo->ks);
+        if (status != ERR_SUCCESS)
+            return ERR_CIPHER_INIT;
+
+        // Initialize secondary key schedule for this cipher
+        status = cuCipherInit(cipher, headerKey + totalKeySize + keyOffset, cryptoInfo->ks2);
+        if (status != ERR_SUCCESS)
+            return ERR_MODE_INIT;
+
+        // Set the single cipher for this XTS pass
+        cryptoInfo->ea = cipher;
+
+        // Do a full XTS decryption pass with this single cipher
+        cuDecryptBuffer (header + HEADER_ENCRYPTED_DATA_OFFSET, HEADER_ENCRYPTED_DATA_SIZE, cryptoInfo);
+    }
 	    
 	// Magic 'TRUE'
 	if (GetHeaderField32 (header, TC_HEADER_OFFSET_MAGIC) != 0x54525545)

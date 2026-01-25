@@ -68,18 +68,13 @@
 /* #define TRACE_INTERMEDIATE_VALUES */
 
 /*
- * The number of rounds of the internal dedicated block cipher.
- */
-#define R 10
-
-/*
  * Though Whirlpool is endianness-neutral, the encryption tables are listed
  * in BIG-ENDIAN format, which is adopted throughout this implementation
  * (but little-endian notation would be equally suitable if consistently
  * employed).
  */
 
-__constant__ static const u64 C0[256] = {
+__constant__ const u64 C0[256] = {
     LL(0x18186018c07830d8), LL(0x23238c2305af4626), LL(0xc6c63fc67ef991b8), LL(0xe8e887e8136fcdfb),
     LL(0x878726874ca113cb), LL(0xb8b8dab8a9626d11), LL(0x0101040108050209), LL(0x4f4f214f426e9e0d),
     LL(0x3636d836adee6c9b), LL(0xa6a6a2a6590451ff), LL(0xd2d26fd2debdb90c), LL(0xf5f5f3f5fb06f70e),
@@ -146,7 +141,7 @@ __constant__ static const u64 C0[256] = {
     LL(0x2828a0285d885075), LL(0x5c5c6d5cda31b886), LL(0xf8f8c7f8933fed6b), LL(0x8686228644a411c2),
 };
 
-__constant__ static const u64 C1[256] = {
+__constant__ const u64 C1[256] = {
     LL(0xd818186018c07830), LL(0x2623238c2305af46), LL(0xb8c6c63fc67ef991), LL(0xfbe8e887e8136fcd),
     LL(0xcb878726874ca113), LL(0x11b8b8dab8a9626d), LL(0x0901010401080502), LL(0x0d4f4f214f426e9e),
     LL(0x9b3636d836adee6c), LL(0xffa6a6a2a6590451), LL(0x0cd2d26fd2debdb9), LL(0x0ef5f5f3f5fb06f7),
@@ -213,7 +208,7 @@ __constant__ static const u64 C1[256] = {
     LL(0x752828a0285d8850), LL(0x865c5c6d5cda31b8), LL(0x6bf8f8c7f8933fed), LL(0xc28686228644a411),
 };
 
-__constant__ static const u64 C2[256] = {
+__constant__ const u64 C2[256] = {
     LL(0x30d818186018c078), LL(0x462623238c2305af), LL(0x91b8c6c63fc67ef9), LL(0xcdfbe8e887e8136f),
     LL(0x13cb878726874ca1), LL(0x6d11b8b8dab8a962), LL(0x0209010104010805), LL(0x9e0d4f4f214f426e),
     LL(0x6c9b3636d836adee), LL(0x51ffa6a6a2a65904), LL(0xb90cd2d26fd2debd), LL(0xf70ef5f5f3f5fb06),
@@ -280,7 +275,7 @@ __constant__ static const u64 C2[256] = {
     LL(0x50752828a0285d88), LL(0xb8865c5c6d5cda31), LL(0xed6bf8f8c7f8933f), LL(0x11c28686228644a4),
 };
 
-__constant__ static const u64 C3[256] = {
+__constant__ const u64 C3[256] = {
     LL(0x7830d818186018c0), LL(0xaf462623238c2305), LL(0xf991b8c6c63fc67e), LL(0x6fcdfbe8e887e813),
     LL(0xa113cb878726874c), LL(0x626d11b8b8dab8a9), LL(0x0502090101040108), LL(0x6e9e0d4f4f214f42),
     LL(0xee6c9b3636d836ad), LL(0x0451ffa6a6a2a659), LL(0xbdb90cd2d26fd2de), LL(0x06f70ef5f5f3f5fb),
@@ -347,7 +342,7 @@ __constant__ static const u64 C3[256] = {
     LL(0x8850752828a0285d), LL(0x31b8865c5c6d5cda), LL(0x3fed6bf8f8c7f893), LL(0xa411c28686228644),
 };
 
-__constant__ static const u64 C4[256] = {
+__constant__ const u64 C4[256] = {
     LL(0xc07830d818186018), LL(0x05af462623238c23), LL(0x7ef991b8c6c63fc6), LL(0x136fcdfbe8e887e8),
     LL(0x4ca113cb87872687), LL(0xa9626d11b8b8dab8), LL(0x0805020901010401), LL(0x426e9e0d4f4f214f),
     LL(0xadee6c9b3636d836), LL(0x590451ffa6a6a2a6), LL(0xdebdb90cd2d26fd2), LL(0xfb06f70ef5f5f3f5),
@@ -414,7 +409,7 @@ __constant__ static const u64 C4[256] = {
     LL(0x5d8850752828a028), LL(0xda31b8865c5c6d5c), LL(0x933fed6bf8f8c7f8), LL(0x44a411c286862286),
 };
 
-__constant__ static const u64 C5[256] = {
+__constant__ const u64 C5[256] = {
     LL(0x18c07830d8181860), LL(0x2305af462623238c), LL(0xc67ef991b8c6c63f), LL(0xe8136fcdfbe8e887),
     LL(0x874ca113cb878726), LL(0xb8a9626d11b8b8da), LL(0x0108050209010104), LL(0x4f426e9e0d4f4f21),
     LL(0x36adee6c9b3636d8), LL(0xa6590451ffa6a6a2), LL(0xd2debdb90cd2d26f), LL(0xf5fb06f70ef5f5f3),
@@ -481,7 +476,7 @@ __constant__ static const u64 C5[256] = {
     LL(0x285d8850752828a0), LL(0x5cda31b8865c5c6d), LL(0xf8933fed6bf8f8c7), LL(0x8644a411c2868622),
 };
 
-__constant__ static const u64 C6[256] = {
+__constant__ const u64 C6[256] = {
     LL(0x6018c07830d81818), LL(0x8c2305af46262323), LL(0x3fc67ef991b8c6c6), LL(0x87e8136fcdfbe8e8),
     LL(0x26874ca113cb8787), LL(0xdab8a9626d11b8b8), LL(0x0401080502090101), LL(0x214f426e9e0d4f4f),
     LL(0xd836adee6c9b3636), LL(0xa2a6590451ffa6a6), LL(0x6fd2debdb90cd2d2), LL(0xf3f5fb06f70ef5f5),
@@ -548,7 +543,7 @@ __constant__ static const u64 C6[256] = {
     LL(0xa0285d8850752828), LL(0x6d5cda31b8865c5c), LL(0xc7f8933fed6bf8f8), LL(0x228644a411c28686),
 };
 
-__constant__ static const u64 C7[256] = {
+__constant__ const u64 C7[256] = {
     LL(0x186018c07830d818), LL(0x238c2305af462623), LL(0xc63fc67ef991b8c6), LL(0xe887e8136fcdfbe8),
     LL(0x8726874ca113cb87), LL(0xb8dab8a9626d11b8), LL(0x0104010805020901), LL(0x4f214f426e9e0d4f),
     LL(0x36d836adee6c9b36), LL(0xa6a2a6590451ffa6), LL(0xd26fd2debdb90cd2), LL(0xf5f3f5fb06f70ef5),
@@ -615,7 +610,7 @@ __constant__ static const u64 C7[256] = {
     LL(0x28a0285d88507528), LL(0x5c6d5cda31b8865c), LL(0xf8c7f8933fed6bf8), LL(0x86228644a411c286),
 };
 
-__constant__ static const u64 rc[R + 1] = {
+__constant__ const u64 rc[R + 1] = {
     LL(0x0000000000000000),
     LL(0x1823c6e887b8014f),
     LL(0x36a6d2f5796f9152),
@@ -632,7 +627,7 @@ __constant__ static const u64 rc[R + 1] = {
 /**
  * The core Whirlpool transform.
  */
-__device__ static void processBuffer(struct NESSIEstruct * const structpointer) {
+__device__ static void processBuffer(struct NESSIEstruct * const structpointer, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7) {
     int i, r;
     u64 K[8];        /* the round key */
     u64 block[8];    /* mu(buffer) */
@@ -672,78 +667,78 @@ __device__ static void processBuffer(struct NESSIEstruct * const structpointer) 
          * compute K^r from K^{r-1}:
          */
         L[0] =
-            C0[(int)(K[0] >> 56)       ] ^
-            C1[(int)(K[7] >> 48) & 0xff] ^
-            C2[(int)(K[6] >> 40) & 0xff] ^
-            C3[(int)(K[5] >> 32) & 0xff] ^
-            C4[(int)(K[4] >> 24) & 0xff] ^
-            C5[(int)(K[3] >> 16) & 0xff] ^
-            C6[(int)(K[2] >>  8) & 0xff] ^
-            C7[(int)(K[1]      ) & 0xff] ^
+            sC0[(int)(K[0] >> 56)       ] ^
+            sC1[(int)(K[7] >> 48) & 0xff] ^
+            sC2[(int)(K[6] >> 40) & 0xff] ^
+            sC3[(int)(K[5] >> 32) & 0xff] ^
+            sC4[(int)(K[4] >> 24) & 0xff] ^
+            sC5[(int)(K[3] >> 16) & 0xff] ^
+            sC6[(int)(K[2] >>  8) & 0xff] ^
+            sC7[(int)(K[1]      ) & 0xff] ^
             rc[r];
         L[1] =
-            C0[(int)(K[1] >> 56)       ] ^
-            C1[(int)(K[0] >> 48) & 0xff] ^
-            C2[(int)(K[7] >> 40) & 0xff] ^
-            C3[(int)(K[6] >> 32) & 0xff] ^
-            C4[(int)(K[5] >> 24) & 0xff] ^
-            C5[(int)(K[4] >> 16) & 0xff] ^
-            C6[(int)(K[3] >>  8) & 0xff] ^
-            C7[(int)(K[2]      ) & 0xff];
+            sC0[(int)(K[1] >> 56)       ] ^
+            sC1[(int)(K[0] >> 48) & 0xff] ^
+            sC2[(int)(K[7] >> 40) & 0xff] ^
+            sC3[(int)(K[6] >> 32) & 0xff] ^
+            sC4[(int)(K[5] >> 24) & 0xff] ^
+            sC5[(int)(K[4] >> 16) & 0xff] ^
+            sC6[(int)(K[3] >>  8) & 0xff] ^
+            sC7[(int)(K[2]      ) & 0xff];
         L[2] =
-            C0[(int)(K[2] >> 56)       ] ^
-            C1[(int)(K[1] >> 48) & 0xff] ^
-            C2[(int)(K[0] >> 40) & 0xff] ^
-            C3[(int)(K[7] >> 32) & 0xff] ^
-            C4[(int)(K[6] >> 24) & 0xff] ^
-            C5[(int)(K[5] >> 16) & 0xff] ^
-            C6[(int)(K[4] >>  8) & 0xff] ^
-            C7[(int)(K[3]      ) & 0xff];
+            sC0[(int)(K[2] >> 56)       ] ^
+            sC1[(int)(K[1] >> 48) & 0xff] ^
+            sC2[(int)(K[0] >> 40) & 0xff] ^
+            sC3[(int)(K[7] >> 32) & 0xff] ^
+            sC4[(int)(K[6] >> 24) & 0xff] ^
+            sC5[(int)(K[5] >> 16) & 0xff] ^
+            sC6[(int)(K[4] >>  8) & 0xff] ^
+            sC7[(int)(K[3]      ) & 0xff];
         L[3] =
-            C0[(int)(K[3] >> 56)       ] ^
-            C1[(int)(K[2] >> 48) & 0xff] ^
-            C2[(int)(K[1] >> 40) & 0xff] ^
-            C3[(int)(K[0] >> 32) & 0xff] ^
-            C4[(int)(K[7] >> 24) & 0xff] ^
-            C5[(int)(K[6] >> 16) & 0xff] ^
-            C6[(int)(K[5] >>  8) & 0xff] ^
-            C7[(int)(K[4]      ) & 0xff];
+            sC0[(int)(K[3] >> 56)       ] ^
+            sC1[(int)(K[2] >> 48) & 0xff] ^
+            sC2[(int)(K[1] >> 40) & 0xff] ^
+            sC3[(int)(K[0] >> 32) & 0xff] ^
+            sC4[(int)(K[7] >> 24) & 0xff] ^
+            sC5[(int)(K[6] >> 16) & 0xff] ^
+            sC6[(int)(K[5] >>  8) & 0xff] ^
+            sC7[(int)(K[4]      ) & 0xff];
         L[4] =
-            C0[(int)(K[4] >> 56)       ] ^
-            C1[(int)(K[3] >> 48) & 0xff] ^
-            C2[(int)(K[2] >> 40) & 0xff] ^
-            C3[(int)(K[1] >> 32) & 0xff] ^
-            C4[(int)(K[0] >> 24) & 0xff] ^
-            C5[(int)(K[7] >> 16) & 0xff] ^
-            C6[(int)(K[6] >>  8) & 0xff] ^
-            C7[(int)(K[5]      ) & 0xff];
+            sC0[(int)(K[4] >> 56)       ] ^
+            sC1[(int)(K[3] >> 48) & 0xff] ^
+            sC2[(int)(K[2] >> 40) & 0xff] ^
+            sC3[(int)(K[1] >> 32) & 0xff] ^
+            sC4[(int)(K[0] >> 24) & 0xff] ^
+            sC5[(int)(K[7] >> 16) & 0xff] ^
+            sC6[(int)(K[6] >>  8) & 0xff] ^
+            sC7[(int)(K[5]      ) & 0xff];
         L[5] =
-            C0[(int)(K[5] >> 56)       ] ^
-            C1[(int)(K[4] >> 48) & 0xff] ^
-            C2[(int)(K[3] >> 40) & 0xff] ^
-            C3[(int)(K[2] >> 32) & 0xff] ^
-            C4[(int)(K[1] >> 24) & 0xff] ^
-            C5[(int)(K[0] >> 16) & 0xff] ^
-            C6[(int)(K[7] >>  8) & 0xff] ^
-            C7[(int)(K[6]      ) & 0xff];
+            sC0[(int)(K[5] >> 56)       ] ^
+            sC1[(int)(K[4] >> 48) & 0xff] ^
+            sC2[(int)(K[3] >> 40) & 0xff] ^
+            sC3[(int)(K[2] >> 32) & 0xff] ^
+            sC4[(int)(K[1] >> 24) & 0xff] ^
+            sC5[(int)(K[0] >> 16) & 0xff] ^
+            sC6[(int)(K[7] >>  8) & 0xff] ^
+            sC7[(int)(K[6]      ) & 0xff];
         L[6] =
-            C0[(int)(K[6] >> 56)       ] ^
-            C1[(int)(K[5] >> 48) & 0xff] ^
-            C2[(int)(K[4] >> 40) & 0xff] ^
-            C3[(int)(K[3] >> 32) & 0xff] ^
-            C4[(int)(K[2] >> 24) & 0xff] ^
-            C5[(int)(K[1] >> 16) & 0xff] ^
-            C6[(int)(K[0] >>  8) & 0xff] ^
-            C7[(int)(K[7]      ) & 0xff];
+            sC0[(int)(K[6] >> 56)       ] ^
+            sC1[(int)(K[5] >> 48) & 0xff] ^
+            sC2[(int)(K[4] >> 40) & 0xff] ^
+            sC3[(int)(K[3] >> 32) & 0xff] ^
+            sC4[(int)(K[2] >> 24) & 0xff] ^
+            sC5[(int)(K[1] >> 16) & 0xff] ^
+            sC6[(int)(K[0] >>  8) & 0xff] ^
+            sC7[(int)(K[7]      ) & 0xff];
         L[7] =
-            C0[(int)(K[7] >> 56)       ] ^
-            C1[(int)(K[6] >> 48) & 0xff] ^
-            C2[(int)(K[5] >> 40) & 0xff] ^
-            C3[(int)(K[4] >> 32) & 0xff] ^
-            C4[(int)(K[3] >> 24) & 0xff] ^
-            C5[(int)(K[2] >> 16) & 0xff] ^
-            C6[(int)(K[1] >>  8) & 0xff] ^
-            C7[(int)(K[0]      ) & 0xff];
+            sC0[(int)(K[7] >> 56)       ] ^
+            sC1[(int)(K[6] >> 48) & 0xff] ^
+            sC2[(int)(K[5] >> 40) & 0xff] ^
+            sC3[(int)(K[4] >> 32) & 0xff] ^
+            sC4[(int)(K[3] >> 24) & 0xff] ^
+            sC5[(int)(K[2] >> 16) & 0xff] ^
+            sC6[(int)(K[1] >>  8) & 0xff] ^
+            sC7[(int)(K[0]      ) & 0xff];
         K[0] = L[0];
         K[1] = L[1];
         K[2] = L[2];
@@ -756,84 +751,84 @@ __device__ static void processBuffer(struct NESSIEstruct * const structpointer) 
          * apply the r-th round transformation:
          */
         L[0] =
-            C0[(int)(state[0] >> 56)       ] ^
-            C1[(int)(state[7] >> 48) & 0xff] ^
-            C2[(int)(state[6] >> 40) & 0xff] ^
-            C3[(int)(state[5] >> 32) & 0xff] ^
-            C4[(int)(state[4] >> 24) & 0xff] ^
-            C5[(int)(state[3] >> 16) & 0xff] ^
-            C6[(int)(state[2] >>  8) & 0xff] ^
-            C7[(int)(state[1]      ) & 0xff] ^
+            sC0[(int)(state[0] >> 56)       ] ^
+            sC1[(int)(state[7] >> 48) & 0xff] ^
+            sC2[(int)(state[6] >> 40) & 0xff] ^
+            sC3[(int)(state[5] >> 32) & 0xff] ^
+            sC4[(int)(state[4] >> 24) & 0xff] ^
+            sC5[(int)(state[3] >> 16) & 0xff] ^
+            sC6[(int)(state[2] >>  8) & 0xff] ^
+            sC7[(int)(state[1]      ) & 0xff] ^
             K[0];
         L[1] =
-            C0[(int)(state[1] >> 56)       ] ^
-            C1[(int)(state[0] >> 48) & 0xff] ^
-            C2[(int)(state[7] >> 40) & 0xff] ^
-            C3[(int)(state[6] >> 32) & 0xff] ^
-            C4[(int)(state[5] >> 24) & 0xff] ^
-            C5[(int)(state[4] >> 16) & 0xff] ^
-            C6[(int)(state[3] >>  8) & 0xff] ^
-            C7[(int)(state[2]      ) & 0xff] ^
+            sC0[(int)(state[1] >> 56)       ] ^
+            sC1[(int)(state[0] >> 48) & 0xff] ^
+            sC2[(int)(state[7] >> 40) & 0xff] ^
+            sC3[(int)(state[6] >> 32) & 0xff] ^
+            sC4[(int)(state[5] >> 24) & 0xff] ^
+            sC5[(int)(state[4] >> 16) & 0xff] ^
+            sC6[(int)(state[3] >>  8) & 0xff] ^
+            sC7[(int)(state[2]      ) & 0xff] ^
             K[1];
         L[2] =
-            C0[(int)(state[2] >> 56)       ] ^
-            C1[(int)(state[1] >> 48) & 0xff] ^
-            C2[(int)(state[0] >> 40) & 0xff] ^
-            C3[(int)(state[7] >> 32) & 0xff] ^
-            C4[(int)(state[6] >> 24) & 0xff] ^
-            C5[(int)(state[5] >> 16) & 0xff] ^
-            C6[(int)(state[4] >>  8) & 0xff] ^
-            C7[(int)(state[3]      ) & 0xff] ^
+            sC0[(int)(state[2] >> 56)       ] ^
+            sC1[(int)(state[1] >> 48) & 0xff] ^
+            sC2[(int)(state[0] >> 40) & 0xff] ^
+            sC3[(int)(state[7] >> 32) & 0xff] ^
+            sC4[(int)(state[6] >> 24) & 0xff] ^
+            sC5[(int)(state[5] >> 16) & 0xff] ^
+            sC6[(int)(state[4] >>  8) & 0xff] ^
+            sC7[(int)(state[3]      ) & 0xff] ^
             K[2];
         L[3] =
-            C0[(int)(state[3] >> 56)       ] ^
-            C1[(int)(state[2] >> 48) & 0xff] ^
-            C2[(int)(state[1] >> 40) & 0xff] ^
-            C3[(int)(state[0] >> 32) & 0xff] ^
-            C4[(int)(state[7] >> 24) & 0xff] ^
-            C5[(int)(state[6] >> 16) & 0xff] ^
-            C6[(int)(state[5] >>  8) & 0xff] ^
-            C7[(int)(state[4]      ) & 0xff] ^
+            sC0[(int)(state[3] >> 56)       ] ^
+            sC1[(int)(state[2] >> 48) & 0xff] ^
+            sC2[(int)(state[1] >> 40) & 0xff] ^
+            sC3[(int)(state[0] >> 32) & 0xff] ^
+            sC4[(int)(state[7] >> 24) & 0xff] ^
+            sC5[(int)(state[6] >> 16) & 0xff] ^
+            sC6[(int)(state[5] >>  8) & 0xff] ^
+            sC7[(int)(state[4]      ) & 0xff] ^
             K[3];
         L[4] =
-            C0[(int)(state[4] >> 56)       ] ^
-            C1[(int)(state[3] >> 48) & 0xff] ^
-            C2[(int)(state[2] >> 40) & 0xff] ^
-            C3[(int)(state[1] >> 32) & 0xff] ^
-            C4[(int)(state[0] >> 24) & 0xff] ^
-            C5[(int)(state[7] >> 16) & 0xff] ^
-            C6[(int)(state[6] >>  8) & 0xff] ^
-            C7[(int)(state[5]      ) & 0xff] ^
+            sC0[(int)(state[4] >> 56)       ] ^
+            sC1[(int)(state[3] >> 48) & 0xff] ^
+            sC2[(int)(state[2] >> 40) & 0xff] ^
+            sC3[(int)(state[1] >> 32) & 0xff] ^
+            sC4[(int)(state[0] >> 24) & 0xff] ^
+            sC5[(int)(state[7] >> 16) & 0xff] ^
+            sC6[(int)(state[6] >>  8) & 0xff] ^
+            sC7[(int)(state[5]      ) & 0xff] ^
             K[4];
         L[5] =
-            C0[(int)(state[5] >> 56)       ] ^
-            C1[(int)(state[4] >> 48) & 0xff] ^
-            C2[(int)(state[3] >> 40) & 0xff] ^
-            C3[(int)(state[2] >> 32) & 0xff] ^
-            C4[(int)(state[1] >> 24) & 0xff] ^
-            C5[(int)(state[0] >> 16) & 0xff] ^
-            C6[(int)(state[7] >>  8) & 0xff] ^
-            C7[(int)(state[6]      ) & 0xff] ^
+            sC0[(int)(state[5] >> 56)       ] ^
+            sC1[(int)(state[4] >> 48) & 0xff] ^
+            sC2[(int)(state[3] >> 40) & 0xff] ^
+            sC3[(int)(state[2] >> 32) & 0xff] ^
+            sC4[(int)(state[1] >> 24) & 0xff] ^
+            sC5[(int)(state[0] >> 16) & 0xff] ^
+            sC6[(int)(state[7] >>  8) & 0xff] ^
+            sC7[(int)(state[6]      ) & 0xff] ^
             K[5];
         L[6] =
-            C0[(int)(state[6] >> 56)       ] ^
-            C1[(int)(state[5] >> 48) & 0xff] ^
-            C2[(int)(state[4] >> 40) & 0xff] ^
-            C3[(int)(state[3] >> 32) & 0xff] ^
-            C4[(int)(state[2] >> 24) & 0xff] ^
-            C5[(int)(state[1] >> 16) & 0xff] ^
-            C6[(int)(state[0] >>  8) & 0xff] ^
-            C7[(int)(state[7]      ) & 0xff] ^
+            sC0[(int)(state[6] >> 56)       ] ^
+            sC1[(int)(state[5] >> 48) & 0xff] ^
+            sC2[(int)(state[4] >> 40) & 0xff] ^
+            sC3[(int)(state[3] >> 32) & 0xff] ^
+            sC4[(int)(state[2] >> 24) & 0xff] ^
+            sC5[(int)(state[1] >> 16) & 0xff] ^
+            sC6[(int)(state[0] >>  8) & 0xff] ^
+            sC7[(int)(state[7]      ) & 0xff] ^
             K[6];
         L[7] =
-            C0[(int)(state[7] >> 56)       ] ^
-            C1[(int)(state[6] >> 48) & 0xff] ^
-            C2[(int)(state[5] >> 40) & 0xff] ^
-            C3[(int)(state[4] >> 32) & 0xff] ^
-            C4[(int)(state[3] >> 24) & 0xff] ^
-            C5[(int)(state[2] >> 16) & 0xff] ^
-            C6[(int)(state[1] >>  8) & 0xff] ^
-            C7[(int)(state[0]      ) & 0xff] ^
+            sC0[(int)(state[7] >> 56)       ] ^
+            sC1[(int)(state[6] >> 48) & 0xff] ^
+            sC2[(int)(state[5] >> 40) & 0xff] ^
+            sC3[(int)(state[4] >> 32) & 0xff] ^
+            sC4[(int)(state[3] >> 24) & 0xff] ^
+            sC5[(int)(state[2] >> 16) & 0xff] ^
+            sC6[(int)(state[1] >>  8) & 0xff] ^
+            sC7[(int)(state[0]      ) & 0xff] ^
             K[7];
         state[0] = L[0];
         state[1] = L[1];
@@ -881,7 +876,7 @@ __device__ void WHIRLPOOL_init(struct NESSIEstruct * const structpointer) {
  */
 __device__ void WHIRLPOOL_add(const unsigned char * const source,
                unsigned __int32 sourceBits,
-               struct NESSIEstruct * const structpointer) {
+               struct NESSIEstruct * const structpointer, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7) {
     /*
                        sourcePos
                        |
@@ -933,7 +928,7 @@ __device__ void WHIRLPOOL_add(const unsigned char * const source,
             /*
              * process data block:
              */
-            processBuffer(structpointer);
+            processBuffer(structpointer, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
             /*
              * reset buffer:
              */
@@ -979,7 +974,7 @@ __device__ void WHIRLPOOL_add(const unsigned char * const source,
             /*
              * process data block:
              */
-            processBuffer(structpointer);
+            processBuffer(structpointer, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
             /*
              * reset buffer:
              */
@@ -998,7 +993,7 @@ __device__ void WHIRLPOOL_add(const unsigned char * const source,
  * This method uses the invariant: bufferBits < DIGESTBITS
  */
 __device__ void WHIRLPOOL_finalize(struct NESSIEstruct * const structpointer,
-                    unsigned char * const result) {
+                    unsigned char * const result, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7) {
     int i;
     u8 *buffer      = structpointer->buffer;
     u8 *bitLength   = structpointer->bitLength;
@@ -1021,7 +1016,7 @@ __device__ void WHIRLPOOL_finalize(struct NESSIEstruct * const structpointer,
         /*
          * process data block:
          */
-        processBuffer(structpointer);
+        processBuffer(structpointer, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
         /*
          * reset buffer:
          */
@@ -1038,7 +1033,7 @@ __device__ void WHIRLPOOL_finalize(struct NESSIEstruct * const structpointer,
     /*
      * process data block:
      */
-    processBuffer(structpointer);
+    processBuffer(structpointer, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
     /*
      * return the completed message digest:
      */

@@ -121,11 +121,96 @@ static Hash Hashes[] =
 
 
 
+// Get cipher count for an encryption algorithm
+__device__ int cuGetCipherCount(int ea) {
+	switch(ea) {
+		case AES:
+		case SERPENT:
+		case TWOFISH:
+			return 1;
+		case AES_TWOFISH:
+		case SERPENT_AES:
+		case TWOFISH_SERPENT:
+			return 2;
+		case AES_TWOFISH_SERPENT:
+		case SERPENT_TWOFISH_AES:
+			return 3;
+		default:
+			return 0;
+	}
+}
+
+// Get the ciphers for an encryption algorithm
+// Returns ciphers in TrueCrypt's internal array order (first-to-encrypt, last-to-decrypt)
+// Keys are derived and stored in this same order
+// For decryption, iterate from last index to first (reverse order)
+__device__ int cuGetCiphers(int ea, int *ciphers) {
+	switch(ea) {
+		case AES:
+			ciphers[0] = AES;
+			return 1;
+		case SERPENT:
+			ciphers[0] = SERPENT;
+			return 1;
+		case TWOFISH:
+			ciphers[0] = TWOFISH;
+			return 1;
+		case AES_TWOFISH:
+			// Name "AES-Twofish" = outer AES, inner Twofish
+			// Encryption: Twofish -> AES, Decryption: AES -> Twofish
+			ciphers[0] = TWOFISH;
+			ciphers[1] = AES;
+			return 2;
+		case AES_TWOFISH_SERPENT:
+			// Name "AES-Twofish-Serpent" = outer AES, middle Twofish, inner Serpent
+			// Encryption: Serpent -> Twofish -> AES
+			ciphers[0] = SERPENT;
+			ciphers[1] = TWOFISH;
+			ciphers[2] = AES;
+			return 3;
+		case SERPENT_AES:
+			// Name "Serpent-AES" = outer Serpent, inner AES
+			// Encryption: AES -> Serpent, Decryption: Serpent -> AES
+			ciphers[0] = AES;
+			ciphers[1] = SERPENT;
+			return 2;
+		case SERPENT_TWOFISH_AES:
+			// Name "Serpent-Twofish-AES" = outer Serpent, middle Twofish, inner AES
+			// Encryption: AES -> Twofish -> Serpent
+			ciphers[0] = AES;
+			ciphers[1] = TWOFISH;
+			ciphers[2] = SERPENT;
+			return 3;
+		case TWOFISH_SERPENT:
+			// Name "Twofish-Serpent" = outer Twofish, inner Serpent
+			// Encryption: Serpent -> Twofish, Decryption: Twofish -> Serpent
+			ciphers[0] = SERPENT;
+			ciphers[1] = TWOFISH;
+			return 2;
+		default:
+			return 0;
+	}
+}
+
+// Get the key schedule size for a cipher
+__device__ int cuGetCipherKsSize(int cipher) {
+	switch(cipher) {
+		case AES:
+			return sizeof(aes_encrypt_ctx) + sizeof(aes_decrypt_ctx);
+		case SERPENT:
+			return 140 * 4;  // SERPENT_KS
+		case TWOFISH:
+			return TWOFISH_KS;
+		default:
+			return 0;
+	}
+}
+
 /* Return values: 0 = success, ERR_CIPHER_INIT_FAILURE (fatal), ERR_CIPHER_INIT_WEAK_KEY (non-fatal) */
 __device__ int cuCipherInit (int cipher, unsigned char *key, unsigned __int8 *ks)
 {
     int retVal = ERR_SUCCESS;
-	
+
     switch (cipher)
     {
 		case AES:
@@ -196,7 +281,7 @@ __device__ void cuDecipherBlock(int cipher, void *data, void *ks)
 #ifndef TC_WINDOWS_BOOT
 			
 		case AES:
-			aes_decrypt ((const unsigned char*)data, (unsigned char*)data, (const aes_decrypt_ctx *) ((char *) ks + sizeof(aes_decrypt_ctx)));
+			aes_decrypt ((const unsigned char*)data, (unsigned char*)data, (const aes_decrypt_ctx *) ((char *) ks + sizeof(aes_encrypt_ctx)));
 			break;
 #else
 		case AES:
@@ -212,6 +297,51 @@ __device__ void cuDecipherBlock(int cipher, void *data, void *ks)
 		default:
 			;//TC_THROW_FATAL_EXCEPTION;	// Unknown/wrong ID
     }
+}
+
+// Initialize all cipher key schedules for a cascade algorithm
+__device__ int cuCascadeInit(int ea, unsigned char *key, unsigned __int8 *ks) {
+	int ciphers[3];
+	int numCiphers = cuGetCiphers(ea, ciphers);
+	int keyOffset = 0;
+	int ksOffset = 0;
+	int status;
+
+	for (int i = 0; i < numCiphers; i++) {
+		status = cuCipherInit(ciphers[i], key + keyOffset, ks + ksOffset);
+		if (status != ERR_SUCCESS)
+			return status;
+
+		keyOffset += 32;  // Each cipher uses 32 bytes of key
+		ksOffset += cuGetCipherKsSize(ciphers[i]);
+	}
+	return ERR_SUCCESS;
+}
+
+// Decrypt a block with cascade (decrypts in reverse cipher order)
+__device__ void cuDecipherBlockCascade(int ea, void *data, void *ks) {
+	int ciphers[3];
+	int numCiphers = cuGetCiphers(ea, ciphers);
+
+	// Calculate key schedule offsets for each cipher
+	int ksOffsets[3] = {0, 0, 0};
+	int offset = 0;
+	for (int i = 0; i < numCiphers; i++) {
+		ksOffsets[i] = offset;
+		offset += cuGetCipherKsSize(ciphers[i]);
+	}
+
+	// Decrypt in reverse order (last cipher first)
+	for (int i = numCiphers - 1; i >= 0; i--) {
+		cuDecipherBlock(ciphers[i], data, (unsigned __int8*)ks + ksOffsets[i]);
+	}
+}
+
+// Encipher for XTS whitening (uses first cipher only)
+__device__ void cuEncipherBlockForXTS(int ea, void *data, void *ks) {
+	int ciphers[3];
+	cuGetCiphers(ea, ciphers);
+	cuEncipherBlock(ciphers[0], data, ks);
 }
 
 

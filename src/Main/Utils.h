@@ -27,7 +27,7 @@
 #endif
 #include "Tcdefs.h"
 
-#define MAXWORDSIZE	64
+#define MAXWORDSIZE	128
 #define TC_VOLUME_HEADER_OFFSET			0
 #define TC_VOLUME_HEADER_EFFECTIVE_SIZE	512
 

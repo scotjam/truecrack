@@ -268,16 +268,22 @@ typedef int BOOL;
 #define burn(mem,size) do { volatile char *burnm = (volatile char *)(mem); int burnc = size; while (burnc--) *burnm++ = 0; } while (0)
 #endif
 
-// CUDA-compatible rotate macros - use macros to avoid intrinsic conflicts
+// CUDA-compatible rotate using funnel shift intrinsics (available in CUDA 9+)
 #if defined(__CUDA_ARCH__)
 #undef _rotl
 #undef _rotr
 #undef _lrotl
 #undef _lrotr
-#define _rotl(value, shift) (((value) << (shift)) | ((value) >> (32 - (shift))))
-#define _rotr(value, shift) (((value) >> (shift)) | ((value) << (32 - (shift))))
-#define _lrotl(value, shift) (((value) << (shift)) | ((value) >> (32 - (shift))))
-#define _lrotr(value, shift) (((value) >> (shift)) | ((value) << (32 - (shift))))
+__device__ __forceinline__ unsigned int __rotl_impl(unsigned int value, unsigned int shift) {
+    return __funnelshift_l(value, value, shift);
+}
+__device__ __forceinline__ unsigned int __rotr_impl(unsigned int value, unsigned int shift) {
+    return __funnelshift_r(value, value, shift);
+}
+#define _rotl(value, shift) __rotl_impl((unsigned int)(value), (unsigned int)(shift))
+#define _rotr(value, shift) __rotr_impl((unsigned int)(value), (unsigned int)(shift))
+#define _lrotl(value, shift) __rotl_impl((unsigned int)(value), (unsigned int)(shift))
+#define _lrotr(value, shift) __rotr_impl((unsigned int)(value), (unsigned int)(shift))
 #endif
 
 // The size of the memory area to wipe is in bytes amd it must be a multiple of 8.

@@ -54,12 +54,82 @@ enum
 };
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 #define min(x, y) (((x) < (y)) ? (x) : (y))
+
+// Get the number of ciphers in an encryption algorithm (1 for single, 2-3 for cascades)
+int cpu_GetCipherCount(int ea) {
+	switch(ea) {
+		case AES:
+		case SERPENT:
+		case TWOFISH:
+			return 1;
+		case AES_TWOFISH:
+		case SERPENT_AES:
+		case TWOFISH_SERPENT:
+			return 2;
+		case AES_TWOFISH_SERPENT:
+		case SERPENT_TWOFISH_AES:
+			return 3;
+		default:
+			return 0;
+	}
+}
+
+// Get the ciphers for an encryption algorithm (stored in ENCRYPTION order)
+// TrueCrypt stores keys in encryption order in the derived key
+// Decryption applies ciphers in REVERSE order (done in cpu_DecipherBlockCascade)
+// Returns the number of ciphers, fills ciphers array
+int cpu_GetCiphers(int ea, int *ciphers) {
+	switch(ea) {
+		case AES:
+			ciphers[0] = AES;
+			return 1;
+		case SERPENT:
+			ciphers[0] = SERPENT;
+			return 1;
+		case TWOFISH:
+			ciphers[0] = TWOFISH;
+			return 1;
+		case AES_TWOFISH:
+			// Encryption: AES -> Twofish
+			ciphers[0] = AES;
+			ciphers[1] = TWOFISH;
+			return 2;
+		case AES_TWOFISH_SERPENT:
+			// Encryption: AES -> Twofish -> Serpent
+			ciphers[0] = AES;
+			ciphers[1] = TWOFISH;
+			ciphers[2] = SERPENT;
+			return 3;
+		case SERPENT_AES:
+			// Encryption: Serpent -> AES
+			ciphers[0] = SERPENT;
+			ciphers[1] = AES;
+			return 2;
+		case SERPENT_TWOFISH_AES:
+			// Encryption: Serpent -> Twofish -> AES
+			ciphers[0] = SERPENT;
+			ciphers[1] = TWOFISH;
+			ciphers[2] = AES;
+			return 3;
+		case TWOFISH_SERPENT:
+			// Encryption: Twofish -> Serpent
+			ciphers[0] = TWOFISH;
+			ciphers[1] = SERPENT;
+			return 2;
+		default:
+			return 0;
+	}
+}
+
+// Get the total key size for an encryption algorithm (32 bytes per cipher)
+int cpu_GetKeySize(int ea) {
+	return cpu_GetCipherCount(ea) * 32;
+}
+
 int cpu_GetMaxPkcs5OutSize (void)
 {
-	int size = 32;// Sizes of primary + secondary keys
-	size = max (size, 32 * 2);	// Sizes of primary + secondary keys
-	//size = max (size, cpu_EAGetLargestKeyForMode (XTS) * 2);	// Sizes of primary + secondary keys
-	return size;
+	// Maximum: 3 ciphers * 32 bytes * 2 (primary + secondary XTS keys)
+	return 32 * 3 * 2;
 }
 
 
@@ -206,7 +276,7 @@ void cpu_EncryptDecryptBufferXTS32 (const unsigned __int8 *buffer,
 
 				bufPtr32 -= BYTES_PER_XTS_BLOCK / sizeof (*bufPtr32) - 1;
 
-				// Actual encryption/decryption
+				// Actual encryption/decryption (single cipher per XTS pass)
 				if (decryption)
 					cpu_DecipherBlock (cipher, bufPtr32, ks);
 				else
@@ -292,10 +362,48 @@ void cpu_DecryptBufferXTS (unsigned __int8 *buffer,
 	cpu_EncryptDecryptBufferXTS32 (buffer, length, startDataUnitNo, startCipherBlockNo, ks, ks2, cipher, TRUE);
 }
 
+// Decrypt a single block with cascade (decrypts in reverse cipher order)
+void cpu_DecipherBlockCascade(int ea, void *data, void *ks) {
+	int ciphers[3];
+	int numCiphers = cpu_GetCiphers(ea, ciphers);
+	int ksOffset = 0;
+	int i;
+
+	// Calculate key schedule offsets for each cipher
+	int ksOffsets[3] = {0, 0, 0};
+	int offset = 0;
+	for (i = 0; i < numCiphers; i++) {
+		ksOffsets[i] = offset;
+		switch(ciphers[i]) {
+			case AES:
+				offset += sizeof(aes_encrypt_ctx) + sizeof(aes_decrypt_ctx);
+				break;
+			case SERPENT:
+				offset += 140 * 4;  // SERPENT_KS
+				break;
+			case TWOFISH:
+				offset += TWOFISH_KS;
+				break;
+		}
+	}
+
+	// Decrypt in reverse order (last cipher first)
+	for (i = numCiphers - 1; i >= 0; i--) {
+		cpu_DecipherBlock(ciphers[i], data, (unsigned __int8*)ks + ksOffsets[i]);
+	}
+}
+
+// Encipher a single block for XTS whitening (uses first cipher only for secondary key)
+void cpu_EncipherBlockForXTS(int ea, void *data, void *ks2) {
+	int ciphers[3];
+	cpu_GetCiphers(ea, ciphers);
+	// XTS whitening uses only the first cipher
+	cpu_EncipherBlock(ciphers[0], data, ks2);
+}
+
 void cpu_DecryptBuffer (unsigned __int8 *buf, TC_LARGEST_COMPILER_UINT len, PCRYPTO_INFO cryptoInfo)
 {
 	UINT64_STRUCT dataUnitNo;
-	int cipher;
 
 	// When encrypting/decrypting a buffer (typically a volume header) the sequential number
 	// of the first XTS data unit in the buffer is always 0 and the start of the buffer is
@@ -310,48 +418,90 @@ void cpu_DecryptBuffer (unsigned __int8 *buf, TC_LARGEST_COMPILER_UINT len, PCRY
 
 
 
+// Initialize key schedules for all ciphers in an encryption algorithm
+int cpu_EAInitCascade(int ea, unsigned char *key, unsigned __int8 *ks) {
+	int ciphers[3];
+	int numCiphers = cpu_GetCiphers(ea, ciphers);
+	int keyOffset = 0;
+	int ksOffset = 0;
+	int i, status;
+
+	for (i = 0; i < numCiphers; i++) {
+		status = cpu_CipherInit(ciphers[i], key + keyOffset, ks + ksOffset);
+		if (status != ERR_SUCCESS)
+			return status;
+
+		keyOffset += 32;  // Each cipher uses 32 bytes of key
+		switch(ciphers[i]) {
+			case AES:
+				ksOffset += sizeof(aes_encrypt_ctx) + sizeof(aes_decrypt_ctx);
+				break;
+			case SERPENT:
+				ksOffset += 140 * 4;  // SERPENT_KS
+				break;
+			case TWOFISH:
+				ksOffset += TWOFISH_KS;
+				break;
+		}
+	}
+	return ERR_SUCCESS;
+}
+
 int cpu_Xts(int encryptionAlgorithm, char *encryptedHeader, char *headerKey, int headerKey_length, char *masterKey, int *masterKey_length) {
 	BOOL ReadVolumeHeaderRecoveryMode = FALSE;
 	char header[TC_VOLUME_HEADER_EFFECTIVE_SIZE];
 	PCRYPTO_INFO cryptoInfo;
 	uint16 headerVersion;
 	int status = ERR_PARAMETER_INCORRECT;
-	int primaryKeyOffset=0;
 	CRYPTO_INFO cryptoInfo_struct;
 
 	//int pkcs5PrfCount = LAST_PRF_ID - FIRST_PRF_ID + 1;
-	int i,j;
+	int i,j,c;
 
 	cryptoInfo=&cryptoInfo_struct;
 	memset (cryptoInfo, 0, sizeof (CRYPTO_INFO));
 	if (cryptoInfo == NULL)
 		return ERR_OUT_OF_MEMORY;
 
-
 	// Support only XTS
-	cryptoInfo->mode= XTS ;
-	if(encryptionAlgorithm!=AES && encryptionAlgorithm!=SERPENT && encryptionAlgorithm!=TWOFISH)
-		return ERR_CIPHER_INIT;
-	cryptoInfo->ea=encryptionAlgorithm;
+	cryptoInfo->mode = XTS;
 
-	status = cpu_EAInit (cryptoInfo->ea, headerKey + primaryKeyOffset, cryptoInfo->ks);
-	if (status == ERR_CIPHER_INIT_FAILURE)
+	// Get ciphers for this encryption algorithm (in encryption order)
+	int ciphers[3];
+	int numCiphers = cpu_GetCiphers(encryptionAlgorithm, ciphers);
+	if (numCiphers == 0)
 		return ERR_CIPHER_INIT;
-	// Init objects related to the mode of operation
-
-	// Copy the secondary key (if cascade, multiple concatenated)
-	//memcpy (cryptoInfo->km2, headerKey + EAGetKeySize (cryptoInfo->ea), EAGetKeySize (cryptoInfo->ea));
-	memcpy (cryptoInfo->km2, headerKey + 32, 32);
-	// Secondary key schedule
-	if (!cpu_EAInitMode (cryptoInfo)) {
-		return ERR_MODE_INIT;
-	}
 
 	// Copy the header for decryption
 	memcpy (header, encryptedHeader, 512*sizeof(unsigned char));
 
-	// Try to decrypt header
-	cpu_DecryptBuffer (header + HEADER_ENCRYPTED_DATA_OFFSET, HEADER_ENCRYPTED_DATA_SIZE, cryptoInfo);
+	// For cascade XTS decryption, we need to do a full XTS pass for each cipher
+	// in REVERSE order (last cipher first)
+	int totalKeySize = numCiphers * 32;
+
+	// Decrypt in reverse cipher order (last encryption cipher first)
+	for (c = numCiphers - 1; c >= 0; c--) {
+		int cipher = ciphers[c];
+
+		// Calculate key offset for this cipher
+		int keyOffset = c * 32;
+
+		// Initialize primary key schedule for this cipher
+		status = cpu_CipherInit(cipher, (unsigned char*)headerKey + keyOffset, cryptoInfo->ks);
+		if (status != ERR_SUCCESS)
+			return ERR_CIPHER_INIT;
+
+		// Initialize secondary key schedule for this cipher
+		status = cpu_CipherInit(cipher, (unsigned char*)headerKey + totalKeySize + keyOffset, cryptoInfo->ks2);
+		if (status != ERR_SUCCESS)
+			return ERR_MODE_INIT;
+
+		// Set the single cipher for this XTS pass
+		cryptoInfo->ea = cipher;
+
+		// Do a full XTS decryption pass with this single cipher
+		cpu_DecryptBuffer ((unsigned char*)header + HEADER_ENCRYPTED_DATA_OFFSET, HEADER_ENCRYPTED_DATA_SIZE, cryptoInfo);
+	}
 
 	// Magic 'TRUE'
 	if (GetHeaderField32 (header, TC_HEADER_OFFSET_MAGIC) != 0x54525545)

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include "Utils.h"
 #include "Core.h"
+#include "Crypto.h"
 
 #include "Charset.h"
 #ifdef _GPU_
@@ -144,16 +145,107 @@ void core(void){
 	printf("Website: %s\n",WEBSITE);
 	printf("Contact us: %s\n",EMAIL);
 
-	/* 1. Allocation and initialization of variables*/
-	core_init();
+	/* Handle EA_ALL and KDF_ALL: try all combinations */
+	int algorithms[8] = {
+		AES,
+		AES_TWOFISH_SERPENT,
+		SERPENT_TWOFISH_AES,
+		AES_TWOFISH,
+		SERPENT_AES,
+		TWOFISH_SERPENT,
+		SERPENT,
+		TWOFISH
+	};
+	const char *algoNames[8] = {
+		"AES",
+		"AES-Twofish-Serpent",
+		"Serpent-Twofish-AES",
+		"AES-Twofish",
+		"Serpent-AES",
+		"Twofish-Serpent",
+		"Serpent",
+		"Twofish"
+	};
+	int numAlgorithms = 1;
+	int algoIndex = 0;
+	int originalAlgorithm = CORE_encryptionAlgorithm;
 
-	/* 2. Start computation */
-	if (CORE_typeAttack==ATTACK_DICTIONARY)
-		core_dictionary();
-	else if (CORE_typeAttack==ATTACK_CHARSET)
-		core_charset();
-	else
-		printf("Select an invalid operation mode\n");
+	int hashFuncs[3] = {RIPEMD160, SHA512, WHIRLPOOL};
+	const char *hashNames[3] = {"RIPEMD160", "SHA512", "Whirlpool"};
+	int numHashFuncs = 1;
+	int hashIndex = 0;
+	int originalHashFunc = CORE_keyDerivationFunction;
+
+	int startAlgoIndex = 0;
+	int endAlgoIndex = 1;
+
+	if (CORE_encryptionAlgorithm == EA_ALL) {
+		numAlgorithms = 8;
+		endAlgoIndex = 8;
+	} else {
+		// Find the index for the specific algorithm
+		for (int k = 0; k < 8; k++) {
+			if (algorithms[k] == originalAlgorithm) {
+				startAlgoIndex = k;
+				endAlgoIndex = k + 1;
+				break;
+			}
+		}
+	}
+	if (CORE_keyDerivationFunction == KDF_ALL) {
+		numHashFuncs = 3;
+	}
+
+	if (numAlgorithms > 1 || numHashFuncs > 1) {
+		printf("\nTrying %d combination(s): %d encryption algorithm(s) x %d hash function(s)...\n",
+			numAlgorithms * numHashFuncs, numAlgorithms, numHashFuncs);
+	}
+
+	for (algoIndex = startAlgoIndex; algoIndex < endAlgoIndex && status != 1; algoIndex++) {
+		if (originalAlgorithm == EA_ALL) {
+			CORE_encryptionAlgorithm = algorithms[algoIndex];
+		}
+
+		for (hashIndex = 0; hashIndex < numHashFuncs && status != 1; hashIndex++) {
+			if (originalHashFunc == KDF_ALL) {
+				CORE_keyDerivationFunction = hashFuncs[hashIndex];
+			}
+
+				if (numAlgorithms > 1 || numHashFuncs > 1) {
+				int dispHashIdx = (originalHashFunc == KDF_ALL) ? hashIndex : (CORE_keyDerivationFunction - 1);
+				printf("\n=== Trying %s + %s ===\n", algoNames[algoIndex], hashNames[dispHashIdx]);
+			}
+
+			/* 1. Allocation and initialization of variables*/
+			core_init();
+
+			/* 2. Start computation */
+			if (CORE_typeAttack==ATTACK_DICTIONARY)
+				core_dictionary();
+			else if (CORE_typeAttack==ATTACK_CHARSET)
+				core_charset();
+			else
+				printf("Select an invalid operation mode\n");
+
+			/* If not found and more combinations to try, reset for next attempt */
+			int moreToTry = (algoIndex < numAlgorithms - 1) || (hashIndex < numHashFuncs - 1);
+			if (status != 1 && moreToTry) {
+				int dispHashIdx = (originalHashFunc == KDF_ALL) ? hashIndex : (CORE_keyDerivationFunction - 1);
+				printf("Password not found with %s + %s, trying next combination...\n",
+					algoNames[algoIndex], hashNames[dispHashIdx]);
+				/* Reset counters for next attempt */
+				count = 0;
+				iblock = 0;
+				i = 0;
+				wordlength = 1;
+				/* Reopen wordlist file for dictionary attacks */
+				if (CORE_typeAttack == ATTACK_DICTIONARY) {
+					fclose(fp_words);
+					fp_words = file_open(CORE_wordsPath);
+				}
+			}
+		}
+	}
 
 	/* 3. Check the result */
 	if (status==1) {
@@ -162,7 +254,12 @@ void core(void){
 		for (j=0;j<password_size;j++)
 			printf("%c",password[j]);
 		printf("\"\nPassword length:\t\"%d\"\n",password_size);
-		printf("Total computations:\t\"%llu\"\n",count);	
+		printf("Total computations:\t\"%llu\"\n",count);
+		if (originalAlgorithm == EA_ALL || originalHashFunc == KDF_ALL) {
+			int dispHashIdx = (originalHashFunc == KDF_ALL) ? (hashIndex - 1) : (CORE_keyDerivationFunction - 1);
+			printf("Encryption algorithm:\t\"%s\"\n", algoNames[algoIndex - 1]);
+			printf("Hash function:\t\t\"%s\"\n", hashNames[dispHashIdx]);
+		}
 
 	} else {
 		printf("No found password\nTotal computations:\t\"%llu\"\n",count);
@@ -218,7 +315,7 @@ void core(void){
 					if (result[j]==1)
 						printf("YES\n");
 					else
-						printf("NO\n");
+						printf("NO (err=%d)\\n", result[j]);
 				}
 				printf("--- Performance: %g p/s, time: %.2g s, passwords: %d \n",block_size/(time/1000),time/1000,block_size);
 			}

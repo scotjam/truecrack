@@ -24,7 +24,7 @@
 #include <stdint.h>
 #endif
 
-#define PASSWORD_MAXSIZE	32
+#define PASSWORD_MAXSIZE	128
 #define SALT_LENGTH 		64
 #define ITERATIONS		2000
 #define HEADER_SALT_OFFSET 0

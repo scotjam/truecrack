@@ -19,7 +19,6 @@
  */
 #include "Pkcs5.cuh"
 
-
 /*
 __device__ void cuda_Pbkdf2 ( unsigned char *salt, unsigned char *pwd, int pwd_len, unsigned char *headerkey) {
 	SupportPkcs5 support;
@@ -412,7 +411,8 @@ __device__ void cuda_hmac_whirlpool
 	  unsigned char *d,		/* data */
 	  int ld,		/* length of data in bytes */
 	  unsigned char *out,	/* output buffer, at least "t" bytes */
-	  int t
+	  int t,
+	  u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7
 )
 {
 	WHIRLPOOL_CTX ictx, octx;
@@ -428,8 +428,8 @@ __device__ void cuda_hmac_whirlpool
 		WHIRLPOOL_CTX tctx;
 
 		WHIRLPOOL_init (&tctx);
-		WHIRLPOOL_add ((unsigned char *) k, lk * 8, &tctx);
-		WHIRLPOOL_finalize (&tctx, (unsigned char *) key);
+		WHIRLPOOL_add ((unsigned char *) k, lk * 8, &tctx, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
+		WHIRLPOOL_finalize (&tctx, (unsigned char *) key, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 
 		k = key;
 		lk = WHIRLPOOL_DIGESTSIZE;
@@ -447,10 +447,10 @@ __device__ void cuda_hmac_whirlpool
 	for (i = lk; i < WHIRLPOOL_BLOCKSIZE; ++i)
 		buf[i] = (unsigned char) 0x36;
 
-	WHIRLPOOL_add ((unsigned char *) buf, WHIRLPOOL_BLOCKSIZE * 8, &ictx);
-	WHIRLPOOL_add ((unsigned char *) d, ld * 8, &ictx);
+	WHIRLPOOL_add ((unsigned char *) buf, WHIRLPOOL_BLOCKSIZE * 8, &ictx, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
+	WHIRLPOOL_add ((unsigned char *) d, ld * 8, &ictx, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 
-	WHIRLPOOL_finalize (&ictx, (unsigned char *) iwhi);
+	WHIRLPOOL_finalize (&ictx, (unsigned char *) iwhi, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 
 	/**** Outer Digest ****/
 
@@ -461,10 +461,10 @@ __device__ void cuda_hmac_whirlpool
 	for (i = lk; i < WHIRLPOOL_BLOCKSIZE; ++i)
 		buf[i] = (unsigned char) 0x5C;
 
-	WHIRLPOOL_add ((unsigned char *) buf, WHIRLPOOL_BLOCKSIZE * 8, &octx);
-	WHIRLPOOL_add ((unsigned char *) iwhi, WHIRLPOOL_DIGESTSIZE * 8, &octx);
+	WHIRLPOOL_add ((unsigned char *) buf, WHIRLPOOL_BLOCKSIZE * 8, &octx, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
+	WHIRLPOOL_add ((unsigned char *) iwhi, WHIRLPOOL_DIGESTSIZE * 8, &octx, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 
-	WHIRLPOOL_finalize (&octx, (unsigned char *) owhi);
+	WHIRLPOOL_finalize (&octx, (unsigned char *) owhi, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 
 	/* truncate and print the results */
 	t = t > WHIRLPOOL_DIGESTSIZE ? WHIRLPOOL_DIGESTSIZE : t;
@@ -479,7 +479,7 @@ __device__ void cuda_hmac_whirlpool
 	burn (key, sizeof(key));
 }
 
-__device__ void cuda_derive_u_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *u, int b)
+__device__ void cuda_derive_u_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *u, int b, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7)
 {
 	unsigned char j[WHIRLPOOL_DIGESTSIZE], k[WHIRLPOOL_DIGESTSIZE];
 	unsigned char init[128];
@@ -491,13 +491,13 @@ __device__ void cuda_derive_u_whirlpool (unsigned char *pwd, int pwd_len, unsign
 	counter[3] = (char) b;
 	memcpy (init, salt, salt_len);	/* salt */
 	memcpy (&init[salt_len], counter, 4);	/* big-endian block number */
-	cuda_hmac_whirlpool (pwd, pwd_len, init, salt_len + 4, j, WHIRLPOOL_DIGESTSIZE);
+	cuda_hmac_whirlpool (pwd, pwd_len, init, salt_len + 4, j, WHIRLPOOL_DIGESTSIZE, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 	memcpy (u, j, WHIRLPOOL_DIGESTSIZE);
 
 	/* remaining iterations */
 	for (c = 1; c < iterations; c++)
 	{
-		cuda_hmac_whirlpool (pwd, pwd_len, j, WHIRLPOOL_DIGESTSIZE, k, WHIRLPOOL_DIGESTSIZE);
+		cuda_hmac_whirlpool (pwd, pwd_len, j, WHIRLPOOL_DIGESTSIZE, k, WHIRLPOOL_DIGESTSIZE, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 		for (i = 0; i < WHIRLPOOL_DIGESTSIZE; i++)
 		{
 			u[i] ^= k[i];
@@ -510,7 +510,7 @@ __device__ void cuda_derive_u_whirlpool (unsigned char *pwd, int pwd_len, unsign
 	burn (k, sizeof(k));
 }
 
-__device__ void cuda_derive_key_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *dk, int dklen)
+__device__ void cuda_derive_key_whirlpool (unsigned char *pwd, int pwd_len, unsigned char *salt, int salt_len, int iterations, unsigned char *dk, int dklen, u64 *sC0, u64 *sC1, u64 *sC2, u64 *sC3, u64 *sC4, u64 *sC5, u64 *sC6, u64 *sC7)
 {
 	unsigned char u[WHIRLPOOL_DIGESTSIZE];
 	int b, l, r;
@@ -529,13 +529,13 @@ __device__ void cuda_derive_key_whirlpool (unsigned char *pwd, int pwd_len, unsi
 	/* first l - 1 blocks */
 	for (b = 1; b < l; b++)
 	{
-		cuda_derive_u_whirlpool (pwd, pwd_len, salt, salt_len, iterations, u, b);
+		cuda_derive_u_whirlpool (pwd, pwd_len, salt, salt_len, iterations, u, b, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 		memcpy (dk, u, WHIRLPOOL_DIGESTSIZE);
 		dk += WHIRLPOOL_DIGESTSIZE;
 	}
 
 	/* last block */
-	cuda_derive_u_whirlpool (pwd, pwd_len, salt, salt_len, iterations, u, b);
+	cuda_derive_u_whirlpool (pwd, pwd_len, salt, salt_len, iterations, u, b, sC0, sC1, sC2, sC3, sC4, sC5, sC6, sC7);
 	memcpy (dk, u, r);
 
 
